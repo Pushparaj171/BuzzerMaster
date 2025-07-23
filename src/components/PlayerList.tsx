@@ -13,7 +13,8 @@ interface PlayerListProps {
 }
 
 export function PlayerList({ players, isHost, isTimerFinished, sessionId }: PlayerListProps) {
-    const buzzingOrder = players.map(p => p.name);
+    const buzzedPlayers = players.filter(p => p.buzzedAt > 0).sort((a, b) => a.buzzedAt - b.buzzedAt);
+    const buzzingOrder = buzzedPlayers.map(p => p.name);
 
   return (
     <Card>
@@ -24,11 +25,11 @@ export function PlayerList({ players, isHost, isTimerFinished, sessionId }: Play
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {players.length === 0 ? (
+        {buzzedPlayers.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">No one has buzzed yet. Waiting for the first buzz!</p>
         ) : (
           <ol className="space-y-3">
-            {players.map((player, index) => (
+            {buzzedPlayers.map((player, index) => (
               <li
                 key={`${player.name}-${index}`}
                 className="flex items-center justify-between p-3 rounded-md bg-muted/50"

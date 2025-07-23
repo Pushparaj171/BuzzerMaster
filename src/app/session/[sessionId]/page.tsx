@@ -16,8 +16,7 @@ import { ref, onValue, set, get, child } from 'firebase/database';
 
 const SESSION_DURATION = 120; // 2 minutes
 
-function SessionComponent({ params: paramsPromise }: { params: Promise<{ sessionId: string }> }) {
-  const params = use(paramsPromise);
+function SessionComponent({ params }: { params: { sessionId: string } }) {
   const sessionId = params.sessionId;
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || 'Anonymous';
@@ -34,7 +33,7 @@ function SessionComponent({ params: paramsPromise }: { params: Promise<{ session
     set(playerRef, { name: playerName, buzzedAt: -1 });
 
     const sessionRef = ref(database, `sessions/${sessionId}`);
-    onValue(sessionRef, (snapshot) => {
+    const unsubscribe = onValue(sessionRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         if(data.isTimerRunning && !isTimerRunning) {
@@ -59,14 +58,19 @@ function SessionComponent({ params: paramsPromise }: { params: Promise<{ session
         const self = playerList.find(p => p.name === playerName);
         if(self && self.buzzedAt > 0) {
           setHasBuzzed(true);
+        } else {
+          // Reset buzz status if host resets the game
+          setHasBuzzed(false);
         }
       }
     });
 
+    return () => unsubscribe();
+
   }, [sessionId, playerName, toast, isTimerRunning, isTimerFinished]);
 
   const handleBuzz = async () => {
-    if (hasBuzzed || !isTimerRunning) return;
+    if (hasBuzzed || !isTimerRunning || isTimerFinished) return;
 
     const dbRef = ref(database);
     const snapshot = await get(child(dbRef, `sessions/${sessionId}`));
@@ -95,6 +99,8 @@ function SessionComponent({ params: paramsPromise }: { params: Promise<{ session
     // This is now controlled by the host
   };
 
+  const buzzedPlayers = players.filter(p => p.buzzedAt > 0);
+
   return (
     <div className="min-h-screen bg-background p-4 sm:p-8 font-body">
         <header className="flex justify-between items-center mb-8">
@@ -118,14 +124,15 @@ function SessionComponent({ params: paramsPromise }: { params: Promise<{ session
                     />
                     <Buzzer onBuzz={handleBuzz} disabled={!isTimerRunning || isTimerFinished} isBuzzed={hasBuzzed} />
                 </div>
-                <PlayerList players={players.filter(p => p.buzzedAt > 0)} isHost={false} isTimerFinished={isTimerFinished} sessionId={sessionId} />
+                <PlayerList players={buzzedPlayers} isHost={false} isTimerFinished={isTimerFinished} sessionId={sessionId} />
             </div>
         </main>
     </div>
   );
 }
 
-export default function SessionPage({ params }: { params: { sessionId: string } }) {
+export default function SessionPage({ params: paramsPromise }: { params: Promise<{ sessionId: string }> }) {
+    const params = use(paramsPromise);
     return (
         <Suspense fallback={<div>Loading...</div>}>
             <SessionComponent params={params} />
