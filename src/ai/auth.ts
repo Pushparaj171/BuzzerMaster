@@ -1,13 +1,14 @@
 'use server';
 
-import { z, defineAuth } from 'genkit';
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
 
-export const SignedInAuthPolicy = defineAuth(
+export const SignedInAuthPolicy = ai.defineAuth(
   {
     name: 'signed-in-auth-policy',
-    inputSchema: z.object({ userId: z.string() }),
+    inputSchema: z.object({userId: z.string()}),
   },
-  async (input) => {
+  async input => {
     if (!input.userId) {
       throw new Error('User must be signed in');
     }
