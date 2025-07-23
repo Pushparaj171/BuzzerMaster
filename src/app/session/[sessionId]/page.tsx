@@ -11,42 +11,78 @@ import { Buzzer } from '@/components/Buzzer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Home } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { database } from '@/lib/firebase';
+import { ref, onValue, set, get, child } from 'firebase/database';
 
 const SESSION_DURATION = 120; // 2 minutes
 
 function SessionComponent({ params: paramsPromise }: { params: Promise<{ sessionId: string }> }) {
   const params = use(paramsPromise);
+  const sessionId = params.sessionId;
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || 'Anonymous';
   const { toast } = useToast();
 
-  // MOCK DATA and STATE - In a real app, this would come from a backend like Firebase.
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isTimerFinished, setIsTimerFinished] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
   const [hasBuzzed, setHasBuzzed] = useState(false);
   const [startTime, setStartTime] = useState(0);
 
-  // Mock starting the timer after a short delay to simulate connecting
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsTimerRunning(true);
-      setStartTime(Date.now());
-      toast({
-        title: "Session Started!",
-        description: "The host has started the timer. Get ready to buzz!",
-      });
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [toast]);
+    const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}`);
+    set(playerRef, { name: playerName, buzzedAt: -1 });
 
-  const handleBuzz = () => {
+    const sessionRef = ref(database, `sessions/${sessionId}`);
+    onValue(sessionRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        if(data.isTimerRunning && !isTimerRunning) {
+            toast({
+                title: "Session Started!",
+                description: "The host has started the timer. Get ready to buzz!",
+            });
+        }
+        setIsTimerRunning(data.isTimerRunning);
+        if(data.isTimerFinished && !isTimerFinished) {
+            toast({
+                title: "Time's up!",
+                description: "The round has ended.",
+            });
+        }
+        setIsTimerFinished(data.isTimerFinished);
+        setStartTime(data.startTime);
+        const playerList: Player[] = data.players ? Object.values(data.players) : [];
+        playerList.sort((a,b) => a.buzzedAt - b.buzzedAt);
+        setPlayers(playerList);
+
+        const self = playerList.find(p => p.name === playerName);
+        if(self && self.buzzedAt > 0) {
+          setHasBuzzed(true);
+        }
+      }
+    });
+
+  }, [sessionId, playerName, toast, isTimerRunning, isTimerFinished]);
+
+  const handleBuzz = async () => {
     if (hasBuzzed || !isTimerRunning) return;
-    
-    const buzzedAt = Date.now() - startTime;
-    const self: Player = { name: playerName, buzzedAt };
 
-    setPlayers(prev => [...prev, self].sort((a,b) => a.buzzedAt - b.buzzedAt));
+    const dbRef = ref(database);
+    const snapshot = await get(child(dbRef, `sessions/${sessionId}`));
+    if(!snapshot.exists()) {
+        toast({ title: "Error", description: "Session not found.", variant: "destructive" });
+        return;
+    }
+    const session = snapshot.val();
+    if(!session.isTimerRunning || session.isTimerFinished) {
+        toast({ title: "Too late!", description: "The round has already ended.", variant: "destructive" });
+        return;
+    }
+    
+    const buzzedAt = Date.now() - session.startTime;
+    const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}/buzzedAt`);
+    set(playerRef, buzzedAt);
     setHasBuzzed(true);
 
     toast({
@@ -56,12 +92,7 @@ function SessionComponent({ params: paramsPromise }: { params: Promise<{ session
   };
 
   const handleTimerEnd = () => {
-    setIsTimerRunning(false);
-    setIsTimerFinished(true);
-    toast({
-        title: "Time's up!",
-        description: "The round has ended.",
-      });
+    // This is now controlled by the host
   };
 
   return (
@@ -73,7 +104,7 @@ function SessionComponent({ params: paramsPromise }: { params: Promise<{ session
             </Link>
             <div className="text-right">
                 <p className="font-semibold text-lg">{playerName}</p>
-                <p className="text-sm text-muted-foreground">Session: {params.sessionId}</p>
+                <p className="text-sm text-muted-foreground">Session: {sessionId}</p>
             </div>
         </header>
         <main className="max-w-4xl mx-auto space-y-8">
@@ -83,10 +114,11 @@ function SessionComponent({ params: paramsPromise }: { params: Promise<{ session
                         duration={SESSION_DURATION}
                         isRunning={isTimerRunning}
                         onTimerEnd={handleTimerEnd}
+                        startTime={startTime}
                     />
                     <Buzzer onBuzz={handleBuzz} disabled={!isTimerRunning || isTimerFinished} isBuzzed={hasBuzzed} />
                 </div>
-                <PlayerList players={players} isHost={false} isTimerFinished={isTimerFinished} sessionId={params.sessionId} />
+                <PlayerList players={players.filter(p => p.buzzedAt > 0)} isHost={false} isTimerFinished={isTimerFinished} sessionId={sessionId} />
             </div>
         </main>
     </div>

@@ -9,56 +9,65 @@ import type { Player } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clipboard, Play, RefreshCw, Home, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { database } from '@/lib/firebase';
+import { ref, onValue, set, remove } from 'firebase/database';
 
 const SESSION_DURATION = 120; // 2 minutes
 
 export default function HostPage({ params: paramsPromise }: { params: Promise<{ sessionId: string }> }) {
   const params = use(paramsPromise);
+  const sessionId = params.sessionId;
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isTimerFinished, setIsTimerFinished] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
   const [startTime, setStartTime] = useState<number>(0);
   const { toast } = useToast();
 
+  useEffect(() => {
+    const sessionRef = ref(database, `sessions/${sessionId}`);
+    onValue(sessionRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const playerList: Player[] = data.players ? Object.values(data.players) : [];
+        playerList.sort((a, b) => a.buzzedAt - b.buzzedAt);
+        setPlayers(playerList);
+        setIsTimerRunning(data.isTimerRunning);
+        setIsTimerFinished(data.isTimerFinished);
+        setStartTime(data.startTime);
+      }
+    });
+  }, [sessionId]);
+
   const handleStartTimer = () => {
-    if (players.length > 0) {
-      setPlayers([]);
-    }
-    setIsTimerRunning(true);
-    setIsTimerFinished(false);
-    setStartTime(Date.now());
+    const sessionRef = ref(database, `sessions/${sessionId}`);
+    const newStartTime = Date.now();
+    set(sessionRef, {
+      startTime: newStartTime,
+      isTimerRunning: true,
+      isTimerFinished: false,
+      players: {},
+    });
   };
 
   const handleResetTimer = () => {
+    const sessionRef = ref(database, `sessions/${sessionId}`);
+    remove(sessionRef);
+    setPlayers([]);
     setIsTimerRunning(false);
     setIsTimerFinished(false);
-    setPlayers([]);
+    setStartTime(0);
   };
 
   const handleTimerEnd = () => {
-    setIsTimerRunning(false);
-    setIsTimerFinished(true);
-  };
-  
-  const addMockPlayer = () => {
-    if (!isTimerRunning) {
-      toast({
-        title: "Timer not running",
-        description: "Please start the timer before adding mock players.",
-        variant: "destructive"
-      });
-      return;
-    }
-    const mockPlayerName = `Player ${Math.floor(Math.random() * 100) + 1}`;
-    const buzzedAt = Date.now() - startTime;
-    setPlayers(prev => [...prev, { name: mockPlayerName, buzzedAt }].sort((a,b) => a.buzzedAt - b.buzzedAt));
+    const sessionRef = ref(database, `sessions/${sessionId}/isTimerFinished`);
+    set(sessionRef, true);
   };
 
   const copySessionId = () => {
-    navigator.clipboard.writeText(params.sessionId);
+    navigator.clipboard.writeText(sessionId);
     toast({
       title: "Copied to Clipboard!",
-      description: `Session ID ${params.sessionId} is ready to be shared.`,
+      description: `Session ID ${sessionId} is ready to be shared.`,
     });
   };
 
@@ -81,7 +90,7 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
           <CardContent className="flex flex-col sm:flex-row gap-4 items-center">
             <div className="p-4 bg-muted rounded-lg flex items-center gap-4">
                 <span className="font-semibold text-muted-foreground">Session ID:</span>
-                <span className="font-mono text-2xl font-bold text-primary">{params.sessionId}</span>
+                <span className="font-mono text-2xl font-bold text-primary">{sessionId}</span>
             </div>
             <Button onClick={copySessionId} variant="outline" size="icon">
               <Clipboard className="w-5 h-5" />
@@ -95,6 +104,7 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
                     duration={SESSION_DURATION}
                     isRunning={isTimerRunning}
                     onTimerEnd={handleTimerEnd}
+                    startTime={startTime}
                 />
                 <div className="flex gap-4">
                     <Button onClick={handleStartTimer} disabled={isTimerRunning} className="w-full font-bold">
@@ -104,27 +114,13 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
                         <RefreshCw className="mr-2" /> Reset
                     </Button>
                 </div>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline flex items-center gap-2"><Users className="w-5 h-5"/> Participants</CardTitle>
-                        <CardDescription>Simulate participants buzzing in for testing purposes.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Button onClick={addMockPlayer} variant="outline" className="w-full">
-                            Simulate Player Buzz
-                        </Button>
-                        <p className="text-xs text-center mt-2 text-muted-foreground">
-                            In a real session, participants will appear automatically.
-                        </p>
-                    </CardContent>
-                </Card>
             </div>
 
             <PlayerList 
                 players={players} 
                 isHost={true} 
                 isTimerFinished={isTimerFinished} 
-                sessionId={params.sessionId} 
+                sessionId={sessionId} 
             />
         </div>
       </main>

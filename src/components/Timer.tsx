@@ -8,19 +8,19 @@ interface TimerProps {
   isRunning: boolean;
   onTimerEnd: () => void;
   onTimeUpdate?: (timeLeft: number) => void;
+  startTime?: number;
 }
 
-export function Timer({ duration, isRunning, onTimerEnd, onTimeUpdate }: TimerProps) {
+export function Timer({ duration, isRunning, onTimerEnd, onTimeUpdate, startTime = 0 }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(duration);
 
   useEffect(() => {
     if (!isRunning) {
-      // If timer is stopped, reset to initial duration
       setTimeLeft(duration);
       return;
     }
-
-    const startTime = Date.now();
+    
+    if(!startTime) return;
 
     const intervalId = setInterval(() => {
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -37,7 +37,7 @@ export function Timer({ duration, isRunning, onTimerEnd, onTimeUpdate }: TimerPr
     }, 1000);
 
     return () => clearInterval(intervalId);
-  }, [isRunning, duration, onTimerEnd, onTimeUpdate]);
+  }, [isRunning, duration, onTimerEnd, onTimeUpdate, startTime]);
   
   useEffect(() => {
     if (!isRunning) {
