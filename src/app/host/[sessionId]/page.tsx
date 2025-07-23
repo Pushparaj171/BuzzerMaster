@@ -31,7 +31,6 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
       const data = snapshot.val();
       if (data) {
         const playerList: Player[] = data.players ? Object.values(data.players) : [];
-        playerList.sort((a, b) => a.buzzedAt - b.buzzedAt);
         setPlayers(playerList);
         setIsTimerRunning(data.isTimerRunning);
         setIsTimerFinished(data.isTimerFinished);
@@ -49,7 +48,10 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
       startTime: newStartTime,
       isTimerRunning: true,
       isTimerFinished: false,
-      players: {},
+      players: players.reduce((acc, player) => {
+        acc[player.name] = { name: player.name, buzzedAt: -1 };
+        return acc;
+        }, {} as Record<string, Player>)
     });
   };
 
@@ -112,7 +114,7 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
                     startTime={startTime}
                 />
                 <div className="flex gap-4">
-                    <Button onClick={handleStartTimer} disabled={isTimerRunning} className="w-full font-bold">
+                    <Button onClick={handleStartTimer} disabled={isTimerRunning || players.length === 0} className="w-full font-bold">
                         <Play className="mr-2" /> Start Timer
                     </Button>
                     <Button onClick={handleResetTimer} variant="secondary" className="w-full font-bold">
@@ -124,7 +126,7 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
             <PlayerList 
                 players={players} 
                 isHost={true} 
-                isTimerFinished={isTimerFinished} 
+                isTimerFinished={isTimerRunning && isTimerFinished} 
                 sessionId={sessionId} 
             />
         </div>

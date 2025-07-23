@@ -1,6 +1,6 @@
 import type { Player } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trophy, Bot } from 'lucide-react';
+import { Trophy, Bot, Users } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogTrigger } from './ui/dialog';
 import { AiSummary } from './AiSummary';
@@ -15,6 +15,35 @@ interface PlayerListProps {
 export function PlayerList({ players, isHost, isTimerFinished, sessionId }: PlayerListProps) {
     const buzzedPlayers = players.filter(p => p.buzzedAt > 0).sort((a, b) => a.buzzedAt - b.buzzedAt);
     const buzzingOrder = buzzedPlayers.map(p => p.name);
+
+    if (isHost && !isTimerFinished) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 font-headline">
+                        <Users className="text-primary" />
+                        Players Joined
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {players.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-8">Waiting for players to join...</p>
+                    ) : (
+                        <ul className="space-y-3">
+                            {players.map((player, index) => (
+                                <li
+                                    key={`${player.name}-${index}`}
+                                    className="flex items-center justify-between p-3 rounded-md bg-muted/50"
+                                >
+                                    <span className="font-medium text-lg">{player.name}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </CardContent>
+            </Card>
+        );
+    }
 
   return (
     <Card>
