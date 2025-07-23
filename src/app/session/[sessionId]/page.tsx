@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Home, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
-import { ref, onValue, set, get, child, onDisconnect } from 'firebase/database';
+import { ref, onValue, set, get, onDisconnect } from 'firebase/database';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 
@@ -34,89 +34,102 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
 
   useEffect(() => {
     const sessionRef = ref(database, `sessions/${sessionId}`);
-    
-    const checkSession = async () => {
+    const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}`);
+
+    let unsubscribe: () => void;
+
+    const setupSession = async () => {
+      try {
         const snapshot = await get(sessionRef);
         if (!snapshot.exists()) {
-            toast({
-                title: "Invalid Session ID",
-                description: "This session does not exist. Please check the ID and try again.",
-                variant: "destructive",
-            });
-            router.push('/');
-            return;
+          toast({
+            title: "Invalid Session ID",
+            description: "This session does not exist. Redirecting to homepage.",
+            variant: "destructive",
+          });
+          router.push('/');
+          return;
         }
 
-        setLoading(false);
-
-        const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}`);
         await set(playerRef, { name: playerName, buzzedAt: -1 });
         onDisconnect(playerRef).remove();
 
-        const unsubscribe = onValue(sessionRef, (dataSnapshot) => {
-            const data = dataSnapshot.val();
-            if (data) {
-                if (data.isTimerRunning && !isTimerRunning) {
-                    toast({
-                        title: "Session Started!",
-                        description: "The host has started the timer. Get ready to buzz!",
-                    });
-                }
-                setIsTimerRunning(data.isTimerRunning);
-                if (data.isTimerFinished && !isTimerFinished) {
-                    toast({
-                        title: "Time's up!",
-                        description: "The round has ended.",
-                    });
-                }
-                setIsTimerFinished(data.isTimerFinished);
-                setStartTime(data.startTime);
-                const playerList: Player[] = data.players ? Object.values(data.players) : [];
-                setPlayers(playerList);
+        unsubscribe = onValue(sessionRef, (dataSnapshot) => {
+          const data = dataSnapshot.val();
+          if (data) {
+            const running = data.isTimerRunning ?? false;
+            const finished = data.isTimerFinished ?? false;
 
-                const self = playerList.find(p => p.name === playerName);
-                if (self && self.buzzedAt > 0) {
-                    setHasBuzzed(true);
-                } else {
-                    setHasBuzzed(false);
-                }
-            } else {
-                toast({
-                    title: "Session Closed",
-                    description: "The host has closed the session.",
-                    variant: "destructive",
-                });
-                router.push('/');
+            if (running && !isTimerRunning) {
+              toast({
+                title: "Session Started!",
+                description: "The host has started the timer. Get ready to buzz!",
+              });
             }
+            if (finished && !isTimerFinished) {
+              toast({
+                title: "Time's up!",
+                description: "The round has ended.",
+              });
+            }
+
+            setIsTimerRunning(running);
+            setIsTimerFinished(finished);
+            setStartTime(data.startTime ?? 0);
+
+            const playerList: Player[] = data.players ? Object.values(data.players) : [];
+            setPlayers(playerList);
+
+            const self = playerList.find(p => p.name === playerName);
+            setHasBuzzed(self ? self.buzzedAt > 0 : false);
+          } else {
+             toast({
+                title: "Session Closed",
+                description: "The host has closed the session.",
+                variant: "destructive",
+            });
+            router.push('/');
+          }
         });
-
-        return () => unsubscribe();
+      } catch (error) {
+        console.error("Firebase error:", error);
+        toast({
+          title: "Error",
+          description: "Could not connect to the session.",
+          variant: "destructive",
+        });
+        router.push('/');
+      } finally {
+        setLoading(false);
+      }
     };
-    
-    checkSession();
 
-  }, [sessionId, playerName, toast, router, isTimerRunning, isTimerFinished]);
+    setupSession();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      onDisconnect(playerRef).cancel();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, playerName, router, toast]);
 
   const handleBuzz = async () => {
     if (hasBuzzed || !isTimerRunning || isTimerFinished) return;
 
-    const dbRef = ref(database);
-    const snapshot = await get(child(dbRef, `sessions/${sessionId}`));
-    if(!snapshot.exists()) {
-        toast({ title: "Error", description: "Session not found.", variant: "destructive" });
-        return;
-    }
-    const session = snapshot.val();
-    if(!session.isTimerRunning || session.isTimerFinished) {
+    const sessionSnapshot = await get(ref(database, `sessions/${sessionId}`));
+    const session = sessionSnapshot.val();
+    
+    if(!session || !session.isTimerRunning || session.isTimerFinished) {
         toast({ title: "Too late!", description: "The round has already ended.", variant: "destructive" });
         return;
     }
     
     const buzzedAt = Date.now() - session.startTime;
-    const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}/buzzedAt`);
-    set(playerRef, buzzedAt);
-    setHasBuzzed(true);
-
+    const playerBuzzedAtRef = ref(database, `sessions/${sessionId}/players/${playerName}/buzzedAt`);
+    await set(playerBuzzedAtRef, buzzedAt);
+    
     toast({
       title: "You've buzzed in!",
       description: `Your time: ${(buzzedAt / 1000).toFixed(2)}s`,
@@ -124,16 +137,16 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
   };
 
   const handleTimerEnd = () => {
-    // This is now controlled by the host
+    // This is controlled by the host
   };
 
-  const buzzedPlayers = players.filter(p => p.buzzedAt > 0);
+  const buzzedPlayers = players.filter(p => p.buzzedAt > 0).sort((a,b) => a.buzzedAt - b.buzzedAt);
   
   if (loading) {
     return (
         <div className="min-h-screen bg-background p-4 sm:p-8 font-body flex flex-col items-center justify-center">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">Validating session...</p>
+            <p className="text-muted-foreground">Joining session...</p>
         </div>
     );
   }
@@ -161,7 +174,7 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
                     />
                     <Buzzer onBuzz={handleBuzz} disabled={!isTimerRunning || isTimerFinished} isBuzzed={hasBuzzed} />
                 </div>
-                <PlayerList players={buzzedPlayers} isHost={false} isTimerFinished={isTimerFinished} sessionId={sessionId} />
+                <PlayerList players={isTimerFinished ? buzzedPlayers : players} isHost={false} isTimerFinished={isTimerFinished} sessionId={sessionId} />
             </div>
         </main>
     </div>
