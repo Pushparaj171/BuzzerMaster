@@ -78,6 +78,8 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
     });
   };
 
+  const buzzedPlayers = players.filter(p => p.buzzedAt > 0);
+
   return (
     <div className="min-h-screen bg-background p-4 sm:p-8 font-body">
       <header className="flex justify-between items-center mb-8">
@@ -124,7 +126,7 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
             </div>
 
             <PlayerList 
-                players={players} 
+                players={isTimerFinished ? buzzedPlayers : players} 
                 isHost={true} 
                 isTimerFinished={isTimerRunning && isTimerFinished} 
                 sessionId={sessionId} 

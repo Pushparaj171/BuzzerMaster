@@ -22,7 +22,7 @@ export function PlayerList({ players, isHost, isTimerFinished, sessionId }: Play
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 font-headline">
                         <Users className="text-primary" />
-                        Players Joined
+                        Players Joined ({players.length})
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -55,7 +55,9 @@ export function PlayerList({ players, isHost, isTimerFinished, sessionId }: Play
       </CardHeader>
       <CardContent>
         {buzzedPlayers.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">No one has buzzed yet. Waiting for the first buzz!</p>
+          <p className="text-muted-foreground text-center py-8">
+            {isTimerFinished ? "Time's up! No one buzzed." : "No one has buzzed yet. Waiting for the first buzz!"}
+          </p>
         ) : (
           <ol className="space-y-3">
             {buzzedPlayers.map((player, index) => (

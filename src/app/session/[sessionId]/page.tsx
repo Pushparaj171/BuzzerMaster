@@ -13,11 +13,13 @@ import { useToast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, onValue, set, get, child, onDisconnect } from 'firebase/database';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 
 const SESSION_DURATION = 120; // 2 minutes
 const ClientTimer = dynamic(() => import('@/components/ClientTimer'), { ssr: false });
 
 function SessionComponent({ params }: { params: { sessionId: string } }) {
+  const router = useRouter();
   const sessionId = params.sessionId;
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || 'Anonymous';
@@ -30,54 +32,66 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
   const [startTime, setStartTime] = useState(0);
 
   useEffect(() => {
-    const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}`);
-    set(playerRef, { name: playerName, buzzedAt: -1 });
-    onDisconnect(playerRef).remove();
-
-
     const sessionRef = ref(database, `sessions/${sessionId}`);
-    const unsubscribe = onValue(sessionRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        if(data.isTimerRunning && !isTimerRunning) {
+    
+    // Check if session exists
+    get(sessionRef).then((snapshot) => {
+        if (!snapshot.exists()) {
             toast({
-                title: "Session Started!",
-                description: "The host has started the timer. Get ready to buzz!",
+                title: "Invalid Session ID",
+                description: "This session does not exist. Please check the ID and try again.",
+                variant: "destructive",
             });
+            router.push('/');
+            return;
         }
-        setIsTimerRunning(data.isTimerRunning);
-        if(data.isTimerFinished && !isTimerFinished) {
-            toast({
-                title: "Time's up!",
-                description: "The round has ended.",
-            });
-        }
-        setIsTimerFinished(data.isTimerFinished);
-        setStartTime(data.startTime);
-        const playerList: Player[] = data.players ? Object.values(data.players) : [];
-        playerList.sort((a,b) => a.buzzedAt - b.buzzedAt);
-        setPlayers(playerList);
 
-        const self = playerList.find(p => p.name === playerName);
-        if(self && self.buzzedAt > 0) {
-          setHasBuzzed(true);
-        } else {
-          // Reset buzz status if host resets the game
-          setHasBuzzed(false);
-        }
-      } else {
-        // Session was likely closed by the host
-        toast({
-            title: "Session Closed",
-            description: "The host has closed the session.",
-            variant: "destructive",
-        })
-      }
+        // If session exists, set player data and onDisconnect handler
+        const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}`);
+        set(playerRef, { name: playerName, buzzedAt: -1 });
+        onDisconnect(playerRef).remove();
+
+        const unsubscribe = onValue(sessionRef, (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            if(data.isTimerRunning && !isTimerRunning) {
+                toast({
+                    title: "Session Started!",
+                    description: "The host has started the timer. Get ready to buzz!",
+                });
+            }
+            setIsTimerRunning(data.isTimerRunning);
+            if(data.isTimerFinished && !isTimerFinished) {
+                toast({
+                    title: "Time's up!",
+                    description: "The round has ended.",
+                });
+            }
+            setIsTimerFinished(data.isTimerFinished);
+            setStartTime(data.startTime);
+            const playerList: Player[] = data.players ? Object.values(data.players) : [];
+            setPlayers(playerList);
+    
+            const self = playerList.find(p => p.name === playerName);
+            if(self && self.buzzedAt > 0) {
+              setHasBuzzed(true);
+            } else {
+              setHasBuzzed(false);
+            }
+          } else {
+            toast({
+                title: "Session Closed",
+                description: "The host has closed the session.",
+                variant: "destructive",
+            });
+            router.push('/');
+          }
+        });
+        
+        return () => unsubscribe();
     });
 
-    return () => unsubscribe();
-
-  }, [sessionId, playerName, toast, isTimerRunning, isTimerFinished]);
+  }, [sessionId, playerName, toast, router, isTimerRunning, isTimerFinished]);
 
   const handleBuzz = async () => {
     if (hasBuzzed || !isTimerRunning || isTimerFinished) return;
