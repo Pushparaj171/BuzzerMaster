@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense, use } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Timer } from '@/components/Timer';
 import { PlayerList } from '@/components/PlayerList';
 import type { Player } from '@/lib/types';
 import { Buzzer } from '@/components/Buzzer';
@@ -12,9 +11,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Home } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
-import { ref, onValue, set, get, child } from 'firebase/database';
+import { ref, onValue, set, get, child, onDisconnect } from 'firebase/database';
+import dynamic from 'next/dynamic';
 
 const SESSION_DURATION = 120; // 2 minutes
+const ClientTimer = dynamic(() => import('@/components/ClientTimer'), { ssr: false });
 
 function SessionComponent({ params }: { params: { sessionId: string } }) {
   const sessionId = params.sessionId;
@@ -31,6 +32,8 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
   useEffect(() => {
     const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}`);
     set(playerRef, { name: playerName, buzzedAt: -1 });
+    onDisconnect(playerRef).remove();
+
 
     const sessionRef = ref(database, `sessions/${sessionId}`);
     const unsubscribe = onValue(sessionRef, (snapshot) => {
@@ -62,6 +65,13 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
           // Reset buzz status if host resets the game
           setHasBuzzed(false);
         }
+      } else {
+        // Session was likely closed by the host
+        toast({
+            title: "Session Closed",
+            description: "The host has closed the session.",
+            variant: "destructive",
+        })
       }
     });
 
@@ -116,7 +126,7 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
         <main className="max-w-4xl mx-auto space-y-8">
             <div className="grid md:grid-cols-2 gap-8 items-start">
                 <div className="space-y-8">
-                    <Timer
+                    <ClientTimer
                         duration={SESSION_DURATION}
                         isRunning={isTimerRunning}
                         onTimerEnd={handleTimerEnd}

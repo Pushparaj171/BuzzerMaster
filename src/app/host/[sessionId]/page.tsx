@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Timer } from '@/components/Timer';
 import { PlayerList } from '@/components/PlayerList';
 import type { Player } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,8 +10,11 @@ import { Clipboard, Play, RefreshCw, Home, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, onValue, set, remove } from 'firebase/database';
+import dynamic from 'next/dynamic';
 
 const SESSION_DURATION = 120; // 2 minutes
+
+const ClientTimer = dynamic(() => import('@/components/ClientTimer'), { ssr: false });
 
 export default function HostPage({ params: paramsPromise }: { params: Promise<{ sessionId: string }> }) {
   const params = use(paramsPromise);
@@ -25,7 +27,7 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
 
   useEffect(() => {
     const sessionRef = ref(database, `sessions/${sessionId}`);
-    onValue(sessionRef, (snapshot) => {
+    const unsubscribe = onValue(sessionRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const playerList: Player[] = data.players ? Object.values(data.players) : [];
@@ -36,6 +38,8 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
         setStartTime(data.startTime);
       }
     });
+
+    return () => unsubscribe();
   }, [sessionId]);
 
   const handleStartTimer = () => {
@@ -51,11 +55,12 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
 
   const handleResetTimer = () => {
     const sessionRef = ref(database, `sessions/${sessionId}`);
-    remove(sessionRef);
-    setPlayers([]);
-    setIsTimerRunning(false);
-    setIsTimerFinished(false);
-    setStartTime(0);
+    remove(sessionRef).then(() => {
+      setPlayers([]);
+      setIsTimerRunning(false);
+      setIsTimerFinished(false);
+      setStartTime(0);
+    });
   };
 
   const handleTimerEnd = () => {
@@ -100,7 +105,7 @@ export default function HostPage({ params: paramsPromise }: { params: Promise<{ 
         
         <div className="grid md:grid-cols-2 gap-8">
             <div className="space-y-4">
-                <Timer
+                <ClientTimer
                     duration={SESSION_DURATION}
                     isRunning={isTimerRunning}
                     onTimerEnd={handleTimerEnd}

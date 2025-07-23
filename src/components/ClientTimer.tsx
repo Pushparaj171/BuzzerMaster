@@ -11,15 +11,17 @@ interface TimerProps {
   startTime?: number;
 }
 
-export function Timer({ duration, isRunning, onTimerEnd, onTimeUpdate, startTime = 0 }: TimerProps) {
+export default function ClientTimer({ duration, isRunning, onTimerEnd, onTimeUpdate, startTime = 0 }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(duration);
 
   useEffect(() => {
     if (!isRunning) {
+      // If the timer is not running, reset to the initial duration.
       setTimeLeft(duration);
       return;
     }
     
+    // Do nothing if the timer is supposed to be running but there's no start time.
     if(!startTime) return;
 
     const intervalId = setInterval(() => {
@@ -36,9 +38,11 @@ export function Timer({ duration, isRunning, onTimerEnd, onTimeUpdate, startTime
       }
     }, 1000);
 
+    // Cleanup interval on component unmount or when dependencies change.
     return () => clearInterval(intervalId);
   }, [isRunning, duration, onTimerEnd, onTimeUpdate, startTime]);
   
+  // An additional effect to reset the timer display when isRunning becomes false.
   useEffect(() => {
     if (!isRunning) {
       setTimeLeft(duration);
