@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Timer } from '@/components/Timer';
@@ -12,7 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 
 const SESSION_DURATION = 120; // 2 minutes
 
-export default function HostPage({ params }: { params: { sessionId: string } }) {
+export default function HostPage({ params: paramsPromise }: { params: Promise<{ sessionId: string }> }) {
+  const params = use(paramsPromise);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [isTimerFinished, setIsTimerFinished] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);

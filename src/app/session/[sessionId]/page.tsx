@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, use } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 
 const SESSION_DURATION = 120; // 2 minutes
 
-function SessionComponent({ params }: { params: { sessionId: string } }) {
+function SessionComponent({ params: paramsPromise }: { params: Promise<{ sessionId: string }> }) {
+  const params = use(paramsPromise);
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || 'Anonymous';
   const { toast } = useToast();
