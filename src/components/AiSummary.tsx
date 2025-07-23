@@ -22,7 +22,6 @@ export function AiSummary({ sessionId, playerName, buzzingOrder }: AiSummaryProp
     setIsLoading(true);
     setSummary('');
     try {
-      // In a real app, you would get the userId from your auth provider
       const result = await summarizePlayerPerformance({
         sessionId,
         playerName,
