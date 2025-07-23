@@ -1,9 +1,9 @@
 'use server';
 
-import {ai} from '@/ai/genkit';
+import {defineAuth} from 'genkit';
 import {z} from 'genkit';
 
-export const SignedInAuthPolicy = ai.defineAuth(
+export const SignedInAuthPolicy = defineAuth(
   {
     name: 'signed-in-auth-policy',
     inputSchema: z.object({userId: z.string()}),
