@@ -34,61 +34,61 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
   useEffect(() => {
     const sessionRef = ref(database, `sessions/${sessionId}`);
     
-    // Check if session exists
     get(sessionRef).then((snapshot) => {
-        if (!snapshot.exists()) {
-            toast({
-                title: "Invalid Session ID",
-                description: "This session does not exist. Please check the ID and try again.",
-                variant: "destructive",
-            });
-            router.push('/');
-            return;
-        }
-
-        // If session exists, set player data and onDisconnect handler
-        const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}`);
-        set(playerRef, { name: playerName, buzzedAt: -1 });
-        onDisconnect(playerRef).remove();
-
-        const unsubscribe = onValue(sessionRef, (snapshot) => {
-          const data = snapshot.val();
-          if (data) {
-            if(data.isTimerRunning && !isTimerRunning) {
-                toast({
-                    title: "Session Started!",
-                    description: "The host has started the timer. Get ready to buzz!",
-                });
-            }
-            setIsTimerRunning(data.isTimerRunning);
-            if(data.isTimerFinished && !isTimerFinished) {
-                toast({
-                    title: "Time's up!",
-                    description: "The round has ended.",
-                });
-            }
-            setIsTimerFinished(data.isTimerFinished);
-            setStartTime(data.startTime);
-            const playerList: Player[] = data.players ? Object.values(data.players) : [];
-            setPlayers(playerList);
-    
-            const self = playerList.find(p => p.name === playerName);
-            if(self && self.buzzedAt > 0) {
-              setHasBuzzed(true);
-            } else {
-              setHasBuzzed(false);
-            }
-          } else {
-            toast({
-                title: "Session Closed",
-                description: "The host has closed the session.",
-                variant: "destructive",
-            });
-            router.push('/');
-          }
+      if (!snapshot.exists()) {
+        toast({
+          title: "Invalid Session ID",
+          description: "This session does not exist. Please check the ID and try again.",
+          variant: "destructive",
         });
-        
-        return () => unsubscribe();
+        router.push('/');
+        return;
+      }
+
+      const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}`);
+      set(playerRef, { name: playerName, buzzedAt: -1 });
+      onDisconnect(playerRef).remove();
+
+      const unsubscribe = onValue(sessionRef, (dataSnapshot) => {
+        const data = dataSnapshot.val();
+        if (data) {
+          if (data.isTimerRunning && !isTimerRunning) {
+            toast({
+              title: "Session Started!",
+              description: "The host has started the timer. Get ready to buzz!",
+            });
+          }
+          setIsTimerRunning(data.isTimerRunning);
+          if (data.isTimerFinished && !isTimerFinished) {
+            toast({
+              title: "Time's up!",
+              description: "The round has ended.",
+            });
+          }
+          setIsTimerFinished(data.isTimerFinished);
+          setStartTime(data.startTime);
+          const playerList: Player[] = data.players ? Object.values(data.players) : [];
+          setPlayers(playerList);
+
+          const self = playerList.find(p => p.name === playerName);
+          if (self && self.buzzedAt > 0) {
+            setHasBuzzed(true);
+          } else {
+            setHasBuzzed(false);
+          }
+        } else if (dataSnapshot.exists()) { 
+          // This case is unlikely if the initial check passes, but good for safety
+        } else {
+           toast({
+              title: "Session Closed",
+              description: "The host has closed the session.",
+              variant: "destructive",
+          });
+          router.push('/');
+        }
+      });
+      
+      return () => unsubscribe();
     });
 
   }, [sessionId, playerName, toast, router, isTimerRunning, isTimerFinished]);
