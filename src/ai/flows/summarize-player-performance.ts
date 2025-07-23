@@ -10,6 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { SignedInAuthPolicy } from '../auth';
 
 const SummarizePlayerPerformanceInputSchema = z.object({
   sessionId: z.string().describe('The ID of the buzzer game session.'),
@@ -25,7 +26,7 @@ const SummarizePlayerPerformanceOutputSchema = z.object({
 export type SummarizePlayerPerformanceOutput = z.infer<typeof SummarizePlayerPerformanceOutputSchema>;
 
 export async function summarizePlayerPerformance(input: SummarizePlayerPerformanceInput): Promise<SummarizePlayerPerformanceOutput> {
-  return summarizePlayerPerformanceFlow(input);
+  return summarizePlayerPerformanceFlow(input, {auth: {userId: 'test-user'}});
 }
 
 const summarizePlayerPerformancePrompt = ai.definePrompt({
@@ -50,6 +51,7 @@ const summarizePlayerPerformanceFlow = ai.defineFlow(
     name: 'summarizePlayerPerformanceFlow',
     inputSchema: SummarizePlayerPerformanceInputSchema,
     outputSchema: SummarizePlayerPerformanceOutputSchema,
+    auth: SignedInAuthPolicy,
   },
   async input => {
     const {output} = await summarizePlayerPerformancePrompt(input);
