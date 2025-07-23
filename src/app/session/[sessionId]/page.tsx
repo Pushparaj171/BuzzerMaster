@@ -8,7 +8,7 @@ import { PlayerList } from '@/components/PlayerList';
 import type { Player } from '@/lib/types';
 import { Buzzer } from '@/components/Buzzer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Home } from 'lucide-react';
+import { Home, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { database } from '@/lib/firebase';
 import { ref, onValue, set, get, child, onDisconnect } from 'firebase/database';
@@ -30,6 +30,7 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [hasBuzzed, setHasBuzzed] = useState(false);
   const [startTime, setStartTime] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const sessionRef = ref(database, `sessions/${sessionId}`);
@@ -44,6 +45,7 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
         router.push('/');
         return;
       }
+      setLoading(false);
 
       const playerRef = ref(database, `sessions/${sessionId}/players/${playerName}`);
       set(playerRef, { name: playerName, buzzedAt: -1 });
@@ -76,8 +78,6 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
           } else {
             setHasBuzzed(false);
           }
-        } else if (dataSnapshot.exists()) { 
-          // This case is unlikely if the initial check passes, but good for safety
         } else {
            toast({
               title: "Session Closed",
@@ -124,6 +124,15 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
   };
 
   const buzzedPlayers = players.filter(p => p.buzzedAt > 0);
+  
+  if (loading) {
+    return (
+        <div className="min-h-screen bg-background p-4 sm:p-8 font-body flex flex-col items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Validating session...</p>
+        </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-4 sm:p-8 font-body">
@@ -158,7 +167,12 @@ function SessionComponent({ params }: { params: { sessionId: string } }) {
 export default function SessionPage({ params: paramsPromise }: { params: Promise<{ sessionId: string }> }) {
     const params = use(paramsPromise);
     return (
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={
+            <div className="min-h-screen bg-background p-4 sm:p-8 font-body flex flex-col items-center justify-center">
+                <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+                <p className="text-muted-foreground">Loading session...</p>
+            </div>
+        }>
             <SessionComponent params={params} />
         </Suspense>
     )
